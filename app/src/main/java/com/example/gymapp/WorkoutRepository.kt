@@ -138,6 +138,7 @@ object WorkoutRepository {
                             .put("weight", s.weight)
                             .put("reps", s.reps)
                             .put("done", s.done)
+                            .put("type", s.type.name)
                     )
                 }
                 exArr.put(
@@ -182,6 +183,8 @@ object WorkoutRepository {
                             weight = so.optString("weight", ""),
                             reps = so.optString("reps", ""),
                             done = so.optBoolean("done", false),
+                            type = runCatching { SetType.valueOf(so.optString("type", "NORMAL")) }
+                                .getOrDefault(SetType.NORMAL),
                         )
                     }
                     WorkoutExercise(
@@ -220,7 +223,7 @@ fun buildSummary(
     val prs = mutableListOf<PrItem>()
 
     exercises.forEach { ex ->
-        val doneSets = ex.sets.filter { it.done && it.weight.isNotBlank() && it.reps.isNotBlank() }
+        val doneSets = ex.sets.filter { it.done && it.type != SetType.WARMUP && it.weight.isNotBlank() && it.reps.isNotBlank() }
         doneSets.forEach { s ->
             val w = s.weight.toDoubleOrNull() ?: 0.0
             val r = s.reps.toIntOrNull() ?: 0
@@ -265,13 +268,13 @@ fun buildSummary(
 
 fun sessionVolume(exercises: List<WorkoutExercise>): Double =
     exercises.sumOf { ex ->
-        ex.sets.filter { it.done }.sumOf { s ->
+        ex.sets.filter { it.done && it.type != SetType.WARMUP }.sumOf { s ->
             (s.weight.toDoubleOrNull() ?: 0.0) * (s.reps.toIntOrNull() ?: 0)
         }
     }
 
 fun sessionSetCount(exercises: List<WorkoutExercise>): Int =
-    exercises.sumOf { ex -> ex.sets.count { it.done } }
+    exercises.sumOf { ex -> ex.sets.count { it.done && it.type != SetType.WARMUP } }
 
 private fun trimNum(v: Double): String =
     if (v == v.toLong().toDouble()) v.toLong().toString()

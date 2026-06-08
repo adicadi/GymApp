@@ -18,7 +18,16 @@ data class WorkoutTemplate(
     val count: Int get() = exercises.size
 }
 
-data class SetData(val prev: String, val weight: String, val reps: String, val done: Boolean)
+/** Logged set classification. Warmup sets are excluded from volume, set counts and PRs. */
+enum class SetType { WARMUP, NORMAL, FAILURE }
+
+data class SetData(
+    val prev: String,
+    val weight: String,
+    val reps: String,
+    val done: Boolean,
+    val type: SetType = SetType.NORMAL,
+)
 
 data class WorkoutExercise(
     val id: String,

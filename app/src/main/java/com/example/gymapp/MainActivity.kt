@@ -564,6 +564,12 @@ fun GymApp() {
                             exercises[ei] = ex.copy(sets = sets)
                         },
                         onToggleSet = { ei, si -> markSetDone(ei, si) },
+                        onSetType = { ei, si, type ->
+                            val ex = exercises[ei]
+                            val sets = ex.sets.toMutableList()
+                            sets[si] = sets[si].copy(type = type)
+                            exercises[ei] = ex.copy(sets = sets)
+                        },
                         onAddSet = { ei -> addSet(ei) },
                         onRemoveSet = { ei, si ->
                             val ex = exercises[ei]

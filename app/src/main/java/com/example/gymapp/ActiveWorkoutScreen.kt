@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +28,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymapp.ui.theme.*
+
+private val WarmupAmber = Color(0xFFF5A524)
+private val FailureRed = Color(0xFFE5484D)
 
 @Composable
 fun ActiveWorkoutScreen(
@@ -41,13 +45,15 @@ fun ActiveWorkoutScreen(
     onToggleOpen: (Int) -> Unit,
     onField: (exerciseIdx: Int, setIdx: Int, key: String, value: String) -> Unit,
     onToggleSet: (exerciseIdx: Int, setIdx: Int) -> Unit,
+    onSetType: (exerciseIdx: Int, setIdx: Int, type: SetType) -> Unit,
     onAddSet: (Int) -> Unit,
     onRemoveSet: (exerciseIdx: Int, setIdx: Int) -> Unit,
     onAddRest: () -> Unit,
     onSkipRest: () -> Unit,
 ) {
-    val totalSets = exercises.sumOf { it.sets.size }
-    val doneSets  = exercises.sumOf { ex -> ex.sets.count { it.done } }
+    // Warmup sets don't count toward workout progress.
+    val totalSets = exercises.sumOf { ex -> ex.sets.count { it.type != SetType.WARMUP } }
+    val doneSets  = exercises.sumOf { ex -> ex.sets.count { it.done && it.type != SetType.WARMUP } }
 
     Box(modifier = Modifier.fillMaxSize().background(BgColor)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -186,6 +192,7 @@ fun ActiveWorkoutScreen(
                         onToggleOpen = { onToggleOpen(ei) },
                         onField = { si, key, value -> onField(ei, si, key, value) },
                         onToggleSet = { si -> onToggleSet(ei, si) },
+                        onSetType = { si, type -> onSetType(ei, si, type) },
                         onAddSet = { onAddSet(ei) },
                         onRemoveSet = { si -> onRemoveSet(ei, si) },
                     )
@@ -266,11 +273,14 @@ private fun ExerciseCard(
     onToggleOpen: () -> Unit,
     onField: (setIdx: Int, key: String, value: String) -> Unit,
     onToggleSet: (Int) -> Unit,
+    onSetType: (setIdx: Int, type: SetType) -> Unit,
     onAddSet: () -> Unit,
     onRemoveSet: (Int) -> Unit,
 ) {
     val muscleCol = muscleColor(exercise.group)
-    val doneCount = exercise.sets.count { it.done }
+    val warmupCount = exercise.sets.count { it.type == SetType.WARMUP }
+    val workingTotal = exercise.sets.count { it.type != SetType.WARMUP }
+    val doneCount = exercise.sets.count { it.done && it.type != SetType.WARMUP }
 
     Column(
         modifier = Modifier
@@ -304,7 +314,13 @@ private fun ExerciseCard(
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
                     MuscleTag(exercise.group)
-                    Text("$doneCount/${exercise.sets.size} sets", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MutedColor)
+                    Text(
+                        buildString {
+                            if (warmupCount > 0) append("${warmupCount}W · ")
+                            append("$doneCount/$workingTotal sets")
+                        },
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MutedColor,
+                    )
                 }
             }
             Icon(
@@ -331,13 +347,16 @@ private fun ExerciseCard(
                     Spacer(Modifier.width(66.dp)) // checkmark(30) + gap(8) + remove(28)
                 }
 
+                var workingNum = 0
                 exercise.sets.forEachIndexed { si, set ->
+                    if (set.type != SetType.WARMUP) workingNum++
                     SetRow(
-                        index = si,
+                        displayNumber = workingNum,
                         set = set,
                         canRemove = exercise.sets.size > 1,
                         onField = { key, value -> onField(si, key, value) },
                         onToggle = { onToggleSet(si) },
+                        onSetType = { type -> onSetType(si, type) },
                         onRemove = { onRemoveSet(si) },
                     )
                 }
@@ -365,13 +384,31 @@ private fun ExerciseCard(
 
 @Composable
 private fun SetRow(
-    index: Int,
+    displayNumber: Int,
     set: SetData,
     canRemove: Boolean,
     onField: (key: String, value: String) -> Unit,
     onToggle: () -> Unit,
+    onSetType: (SetType) -> Unit,
     onRemove: () -> Unit,
 ) {
+    val context = LocalContext.current
+    var showTypeSheet by remember { mutableStateOf(false) }
+
+    // Badge appearance per set type. Warmup → "W" (amber), failure → number (red),
+    // normal → number (accent when done). Tapping it opens the type picker.
+    val badgeText = if (set.type == SetType.WARMUP) "W" else "$displayNumber"
+    val badgeColor = when (set.type) {
+        SetType.WARMUP  -> WarmupAmber
+        SetType.FAILURE -> FailureRed
+        SetType.NORMAL  -> if (set.done) AccentColor else SubTextColor
+    }
+    val badgeBg = when (set.type) {
+        SetType.WARMUP  -> WarmupAmber.copy(alpha = 0.16f)
+        SetType.FAILURE -> FailureRed.copy(alpha = 0.14f)
+        SetType.NORMAL  -> if (set.done) AccentColor.copy(alpha = 0.13f) else SubtleFillColor
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -379,22 +416,36 @@ private fun SetRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Set number badge
+        // Set number badge — tap to choose Warmup / Normal / Failure
         Box(
             modifier = Modifier
                 .width(34.dp)
                 .height(26.dp)
-                .background(
-                    if (set.done) AccentColor.copy(alpha = 0.13f) else SubtleFillColor,
-                    RoundedCornerShape(8.dp),
-                ),
+                .clip(RoundedCornerShape(8.dp))
+                .background(badgeBg)
+                .clickable {
+                    Haptics.tick(context)
+                    showTypeSheet = true
+                },
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                "${index + 1}",
+                badgeText,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (set.done) AccentColor else SubTextColor,
+                color = badgeColor,
+            )
+        }
+
+        if (showTypeSheet) {
+            SetTypeSheet(
+                current = set.type,
+                onSelect = { type ->
+                    Haptics.tick(context)
+                    onSetType(type)
+                    showTypeSheet = false
+                },
+                onDismiss = { showTypeSheet = false },
             )
         }
 
@@ -461,6 +512,100 @@ private fun SetRow(
                 tint = if (canRemove) MutedColor else Color.Transparent,
                 modifier = Modifier.size(15.dp),
             )
+        }
+    }
+}
+
+/** Bottom sheet that slides up to pick a set's type. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SetTypeSheet(
+    current: SetType,
+    onSelect: (SetType) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = CardElevColor,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .padding(bottom = 28.dp),
+        ) {
+            Text(
+                "SET TYPE",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = MutedColor,
+                letterSpacing = 0.6.sp,
+                modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
+            )
+            SetTypeOption(
+                badge = "W", accent = WarmupAmber,
+                title = "Warmup set", subtitle = "Not counted in volume, sets or PRs",
+                selected = current == SetType.WARMUP,
+                onClick = { onSelect(SetType.WARMUP) },
+            )
+            Spacer(Modifier.height(8.dp))
+            SetTypeOption(
+                badge = "1", accent = AccentColor,
+                title = "Normal set", subtitle = "Standard working set",
+                selected = current == SetType.NORMAL,
+                onClick = { onSelect(SetType.NORMAL) },
+            )
+            Spacer(Modifier.height(8.dp))
+            SetTypeOption(
+                badge = "F", accent = FailureRed,
+                title = "Failure set", subtitle = "Taken to muscular failure",
+                selected = current == SetType.FAILURE,
+                onClick = { onSelect(SetType.FAILURE) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SetTypeOption(
+    badge: String,
+    accent: Color,
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(13.dp))
+            .background(if (selected) accent.copy(alpha = 0.12f) else SubtleFillColor)
+            .border(
+                1.dp,
+                if (selected) accent.copy(alpha = 0.5f) else Color.Transparent,
+                RoundedCornerShape(13.dp),
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 13.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(accent.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(badge, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = accent)
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextColor)
+            Text(subtitle, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = MutedColor)
+        }
+        if (selected) {
+            Icon(Icons.Rounded.Check, null, tint = accent, modifier = Modifier.size(20.dp))
         }
     }
 }
