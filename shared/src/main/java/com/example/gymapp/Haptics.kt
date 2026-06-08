@@ -32,6 +32,11 @@ object Haptics {
         play(context, VibrationEffect.createOneShot(25, 80))
     }
 
+    /** Very short tick — a toggle/selection was confirmed. */
+    fun tick(context: Context) {
+        play(context, VibrationEffect.createOneShot(12, 60))
+    }
+
     /** Two very short pulses — the workout is complete. */
     fun workoutComplete(context: Context) {
         // Timing-only waveform (no amplitude dependency): off, on, off, on.
