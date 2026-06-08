@@ -529,11 +529,13 @@ fun GymApp() {
                             template = t,
                             onBack = { screen = backStackScreen },
                             onStart = { startTemplate(it) },
-                            onDelete = routineId?.let { id ->
-                                {
-                                    RoutineRepository.delete(context, id)
-                                    screen = backStackScreen
+                            onDelete = {
+                                if (routineId != null) {
+                                    RoutineRepository.delete(context, routineId)
+                                } else {
+                                    UserStore.deleteTemplate(t.id)
                                 }
+                                screen = backStackScreen
                             },
                         )
                     }

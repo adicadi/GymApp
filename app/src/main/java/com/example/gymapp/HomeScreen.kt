@@ -173,29 +173,38 @@ fun HomeScreen(
         Spacer(Modifier.height(22.dp))
 
         // ── Quick-start templates ─────────────────────────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Quick start", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextColor)
+        val visibleTemplates = mockTemplates.filter { it.id !in UserStore.deletedTemplateIds }
+        val quickStartItems: List<WorkoutTemplate> = if (visibleTemplates.isNotEmpty()) {
+            visibleTemplates
+        } else {
+            RoutineRepository.routines.map { it.toTemplate() }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            mockTemplates.forEach { template ->
-                TemplateCard(template = template, onClick = { onTemplate(template) })
+        if (quickStartItems.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Quick start", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextColor)
             }
-        }
 
-        Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                quickStartItems.forEach { template ->
+                    TemplateCard(template = template, onClick = { onTemplate(template) })
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+        }
 
         // ── Recent workouts ───────────────────────────────────────────────
         Row(

@@ -33,6 +33,7 @@ fun WorkoutLandingScreen(
 ) {
     val last = WorkoutRepository.workouts.firstOrNull()
     val routines = RoutineRepository.routines
+    val visibleTemplates = mockTemplates.filter { it.id !in UserStore.deletedTemplateIds }
 
     Column(
         modifier = Modifier
@@ -156,17 +157,19 @@ fun WorkoutLandingScreen(
         }
 
         // ── Built-in templates ─────────────────────────────────────────────
-        Spacer(Modifier.height(26.dp))
-        Text("Templates", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextColor)
-        Spacer(Modifier.height(12.dp))
+        if (visibleTemplates.isNotEmpty()) {
+            Spacer(Modifier.height(26.dp))
+            Text("Templates", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextColor)
+            Spacer(Modifier.height(12.dp))
 
-        mockTemplates.forEach { template ->
-            PlanCard(
-                title = template.name,
-                meta = "${template.count} exercises · ${template.groups.size} groups",
-                groups = template.groups,
-                onClick = { onTemplate(template) },
-            )
+            visibleTemplates.forEach { template ->
+                PlanCard(
+                    title = template.name,
+                    meta = "${template.count} exercises · ${template.groups.size} groups",
+                    groups = template.groups,
+                    onClick = { onTemplate(template) },
+                )
+            }
         }
     }
 }

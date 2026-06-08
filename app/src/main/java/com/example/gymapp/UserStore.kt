@@ -46,6 +46,8 @@ object UserStore {
         private set
     var loggedIn by mutableStateOf(false)
         private set
+    var deletedTemplateIds by mutableStateOf<Set<String>>(emptySet())
+        private set
 
     fun init(context: Context) {
         val p = context.getSharedPreferences("gymlog_user", Context.MODE_PRIVATE)
@@ -60,6 +62,7 @@ object UserStore {
         weightHistory = parseHistory(p.getString("weightHistory", "") ?: "")
         hasAccount = p.getBoolean("hasAccount", false)
         loggedIn = p.getBoolean("loggedIn", false)
+        deletedTemplateIds = p.getStringSet("deletedTemplates", emptySet()) ?: emptySet()
 
         // Seed a first weight point for existing profiles that have a weight but no history.
         if (weightHistory.isEmpty() && weightKg != null) {
@@ -76,8 +79,14 @@ object UserStore {
         this.birthdayMillis = null
         this.photoPath = null
         this.weightHistory = emptyList()
+        this.deletedTemplateIds = emptySet()
         this.hasAccount = true
         this.loggedIn = true
+        persist()
+    }
+
+    fun deleteTemplate(id: String) {
+        deletedTemplateIds = deletedTemplateIds + id
         persist()
     }
 
@@ -89,6 +98,7 @@ object UserStore {
         accountId = ""
         name = ""; email = ""; heightCm = null; weightKg = null
         birthdayMillis = null; photoPath = null; weightHistory = emptyList()
+        deletedTemplateIds = emptySet()
         hasAccount = false; loggedIn = false
         persist()
     }
@@ -130,6 +140,7 @@ object UserStore {
             ?.putString("weightHistory", historyJson())
             ?.putBoolean("hasAccount", hasAccount)
             ?.putBoolean("loggedIn", loggedIn)
+            ?.putStringSet("deletedTemplates", deletedTemplateIds)
             ?.apply()
     }
 

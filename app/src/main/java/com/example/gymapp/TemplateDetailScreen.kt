@@ -14,6 +14,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +35,8 @@ fun TemplateDetailScreen(
     onStart: (WorkoutTemplate) -> Unit,
     onDelete: (() -> Unit)? = null,
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize().background(BgColor)) {
         DetailTopBar(
             title = template.name,
@@ -43,10 +49,10 @@ fun TemplateDetailScreen(
                             .size(38.dp)
                             .clip(CircleShape)
                             .background(CardColor)
-                            .clickable { onDelete() },
+                            .clickable { showDeleteConfirm = true },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Rounded.DeleteOutline, "Delete routine", tint = MuscleChest, modifier = Modifier.size(19.dp))
+                        Icon(Icons.Rounded.DeleteOutline, "Delete", tint = MuscleChest, modifier = Modifier.size(19.dp))
                     }
                 }
             } else null,
@@ -146,6 +152,33 @@ fun TemplateDetailScreen(
                 Text("Start ${template.name} Workout", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
+    }
+
+    if (showDeleteConfirm && onDelete != null) {
+        val isRoutine = template.id.startsWith("routine-")
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            containerColor = CardElevColor,
+            titleContentColor = TextColor,
+            textContentColor = SubTextColor,
+            title = { Text("Delete \"${template.name}\"?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    if (isRoutine) "This routine will be permanently deleted."
+                    else "This template will be removed from your list. You can recreate it as a custom routine anytime."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
+                    Text("Delete", color = MuscleChest, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel", color = SubTextColor, fontWeight = FontWeight.SemiBold)
+                }
+            },
+        )
     }
 }
 
