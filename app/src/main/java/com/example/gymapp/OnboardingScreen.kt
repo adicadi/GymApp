@@ -33,7 +33,7 @@ import com.example.gymapp.ui.theme.*
 @Composable
 fun OnboardingScreen(
     manager: HealthConnectManager,
-    onComplete: (name: String, email: String) -> Unit,
+    onComplete: (name: String, email: String, gender: String?) -> Unit,
     onLogin: () -> Unit,
 ) {
     // Returning user who logged out: offer to sign back into the saved account.
@@ -48,10 +48,11 @@ fun OnboardingScreen(
     var step by remember { mutableIntStateOf(0) }
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf<String?>(null) }
 
     val hcAvailable = manager.isAvailable
 
-    fun finish() = onComplete(name, email)
+    fun finish() = onComplete(name, email, gender)
 
     val hcLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract(),
@@ -101,6 +102,7 @@ fun OnboardingScreen(
             DetailsStep(
                 name = name, onName = { name = it },
                 email = email, onEmail = { email = it },
+                gender = gender, onGender = { gender = it },
                 onNext = { step = 1 },
             )
         } else {
@@ -159,6 +161,7 @@ private fun WelcomeBackScreen(
 private fun ColumnScope.DetailsStep(
     name: String, onName: (String) -> Unit,
     email: String, onEmail: (String) -> Unit,
+    gender: String?, onGender: (String?) -> Unit,
     onNext: () -> Unit,
 ) {
     Box(
@@ -189,6 +192,12 @@ private fun ColumnScope.DetailsStep(
     Text("Email (optional)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SubTextColor)
     Spacer(Modifier.height(8.dp))
     AppTextField(value = email, onValueChange = onEmail, placeholder = "you@email.com", keyboardType = KeyboardType.Email, modifier = Modifier.fillMaxWidth())
+
+    Spacer(Modifier.height(18.dp))
+
+    Text("Gender (optional)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SubTextColor)
+    Spacer(Modifier.height(8.dp))
+    GenderSelector(selected = gender, onSelect = onGender)
 
     Spacer(Modifier.height(32.dp))
 
@@ -257,6 +266,36 @@ private fun ColumnScope.PermissionsStep(
         }
         TextButton(onClick = onSkip) {
             Text("Maybe later", fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = SubTextColor)
+        }
+    }
+}
+
+@Composable
+internal fun GenderSelector(selected: String?, onSelect: (String?) -> Unit) {
+    val options = listOf("Male", "Female", "Other")
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEach { option ->
+            val on = selected == option
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (on) AccentColor.copy(alpha = 0.13f) else CardColor)
+                    .border(1.dp, if (on) AccentColor else LineColor, RoundedCornerShape(12.dp))
+                    .clickable { onSelect(if (on) null else option) }
+                    .padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    option,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (on) AccentColor else SubTextColor,
+                )
+            }
         }
     }
 }

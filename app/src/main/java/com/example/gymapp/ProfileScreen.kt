@@ -154,7 +154,8 @@ fun ProfileScreen(
                 }
                 val bmiVal = UserStore.bmi
                 val ageVal = UserStore.age
-                if (bmiVal != null || ageVal != null) {
+                val genderVal = UserStore.gender
+                if (bmiVal != null || ageVal != null || genderVal != null) {
                     HorizontalDivider(color = LineColor, thickness = 1.dp)
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
@@ -166,7 +167,10 @@ fun ProfileScreen(
                             fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
                             color = if (bmiVal != null) GoodColor else MutedColor,
                         )
-                        ageVal?.let { Text("Age $it", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = SubTextColor) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            genderVal?.let { Text(it, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = SubTextColor) }
+                            ageVal?.let { Text("Age $it", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = SubTextColor) }
+                        }
                     }
                 }
             }
@@ -391,6 +395,7 @@ private fun EditProfileDialog(onDismiss: () -> Unit) {
     var height by remember { mutableStateOf(UserStore.heightCm?.toString() ?: "") }
     var weight by remember { mutableStateOf(UserStore.weightKg?.let { trimWeight(it) } ?: "") }
     var birthday by remember { mutableStateOf(UserStore.birthdayMillis) }
+    var gender by remember { mutableStateOf(UserStore.gender) }
     var showDatePicker by remember { mutableStateOf(false) }
 
     val dateFmt = remember { SimpleDateFormat("d MMM yyyy", Locale.getDefault()) }
@@ -427,6 +432,10 @@ private fun EditProfileDialog(onDismiss: () -> Unit) {
                         modifier = Modifier.weight(1f),
                     )
                 }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Gender", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = SubTextColor)
+                    GenderSelector(selected = gender, onSelect = { gender = it })
+                }
             }
         },
         confirmButton = {
@@ -437,6 +446,7 @@ private fun EditProfileDialog(onDismiss: () -> Unit) {
                     heightCm = height.toIntOrNull(),
                     weightKg = weight.toDoubleOrNull(),
                     birthdayMillis = birthday,
+                    gender = gender,
                 )
                 onDismiss()
             }) { Text("Save", color = AccentColor, fontWeight = FontWeight.Bold) }

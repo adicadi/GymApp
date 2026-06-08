@@ -467,8 +467,8 @@ fun GymApp() {
                 when (screen) {
                     Screen.ONBOARDING -> OnboardingScreen(
                         manager = manager,
-                        onComplete = { name, email ->
-                            UserStore.createAccount(name, email)   // new accountId
+                        onComplete = { name, email, gender ->
+                            UserStore.createAccount(name, email, gender)   // new accountId
                             WorkoutRepository.reload(context)       // load this account's (empty) data
                             RoutineRepository.reload(context)
                             screen = Screen.HOME

@@ -42,6 +42,8 @@ object UserStore {
         private set
     var weightHistory by mutableStateOf<List<Pair<Long, Double>>>(emptyList())
         private set
+    var gender by mutableStateOf<String?>(null)
+        private set
     var hasAccount by mutableStateOf(false)
         private set
     var loggedIn by mutableStateOf(false)
@@ -60,6 +62,7 @@ object UserStore {
         birthdayMillis = p.getLong("birthdayMillis", -1L).takeIf { it > 0L }
         photoPath = p.getString("photoPath", null)?.takeIf { it.isNotBlank() }
         weightHistory = parseHistory(p.getString("weightHistory", "") ?: "")
+        gender = p.getString("gender", null)
         hasAccount = p.getBoolean("hasAccount", false)
         loggedIn = p.getBoolean("loggedIn", false)
         deletedTemplateIds = p.getStringSet("deletedTemplates", emptySet()) ?: emptySet()
@@ -70,7 +73,7 @@ object UserStore {
         }
     }
 
-    fun createAccount(name: String, email: String) {
+    fun createAccount(name: String, email: String, gender: String? = null) {
         this.accountId = UUID.randomUUID().toString()
         this.name = name.trim()
         this.email = email.trim()
@@ -79,6 +82,7 @@ object UserStore {
         this.birthdayMillis = null
         this.photoPath = null
         this.weightHistory = emptyList()
+        this.gender = gender
         this.deletedTemplateIds = emptySet()
         this.hasAccount = true
         this.loggedIn = true
@@ -98,7 +102,7 @@ object UserStore {
         accountId = ""
         name = ""; email = ""; heightCm = null; weightKg = null
         birthdayMillis = null; photoPath = null; weightHistory = emptyList()
-        deletedTemplateIds = emptySet()
+        gender = null; deletedTemplateIds = emptySet()
         hasAccount = false; loggedIn = false
         persist()
     }
@@ -109,6 +113,7 @@ object UserStore {
         heightCm: Int?,
         weightKg: Double?,
         birthdayMillis: Long?,
+        gender: String? = this.gender,
     ) {
         this.name = name.trim()
         this.email = email.trim()
@@ -120,6 +125,7 @@ object UserStore {
             weightHistory = weightHistory + (System.currentTimeMillis() to newWeight)
         }
         this.weightKg = newWeight
+        this.gender = gender
         persist()
     }
 
@@ -138,6 +144,7 @@ object UserStore {
             ?.putLong("birthdayMillis", birthdayMillis ?: -1L)
             ?.putString("photoPath", photoPath ?: "")
             ?.putString("weightHistory", historyJson())
+            ?.putString("gender", gender)
             ?.putBoolean("hasAccount", hasAccount)
             ?.putBoolean("loggedIn", loggedIn)
             ?.putStringSet("deletedTemplates", deletedTemplateIds)
