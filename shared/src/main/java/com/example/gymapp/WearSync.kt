@@ -79,6 +79,7 @@ object WearSync {
         val currentExerciseIndex: Int = 0,
         val currentWeight: String = "",
         val currentReps: String = "",
+        val currentSetType: SetType = SetType.NORMAL,
     )
 
     /** Glanceable recap shown on the watch right after a session ends, before it returns to idle. */
@@ -159,7 +160,7 @@ object WearSync {
                                     "sets",
                                     JSONArray().apply {
                                         ex.sets.forEach { s ->
-                                            put(JSONObject().put("weight", s.weight).put("reps", s.reps))
+                                            put(JSONObject().put("weight", s.weight).put("reps", s.reps).put("type", s.type.name))
                                         }
                                     },
                                 )
@@ -182,7 +183,8 @@ object WearSync {
                 equip = "",
                 sets = (0 until setArr.length()).map { j ->
                     val so = setArr.getJSONObject(j)
-                    SetData(prev = "—", weight = so.optString("weight", ""), reps = so.optString("reps", ""), done = true)
+                    SetData(prev = "—", weight = so.optString("weight", ""), reps = so.optString("reps", ""), done = true,
+                        type = runCatching { SetType.valueOf(so.optString("type", "NORMAL")) }.getOrDefault(SetType.NORMAL))
                 },
             )
         }
@@ -245,6 +247,7 @@ object WearSync {
             .put("currentExerciseIndex", s.currentExerciseIndex)
             .put("currentWeight", s.currentWeight)
             .put("currentReps", s.currentReps)
+            .put("currentSetType", s.currentSetType.name)
             .toString()
 
     fun decodeActiveWorkout(json: String): ActiveWorkoutSnapshot? = runCatching {
@@ -260,6 +263,7 @@ object WearSync {
             currentExerciseIndex = o.optInt("currentExerciseIndex", 0),
             currentWeight = o.optString("currentWeight", ""),
             currentReps = o.optString("currentReps", ""),
+            currentSetType = runCatching { SetType.valueOf(o.optString("currentSetType", "NORMAL")) }.getOrDefault(SetType.NORMAL),
         )
     }.getOrNull()
 

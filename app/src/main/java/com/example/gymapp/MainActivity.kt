@@ -397,6 +397,7 @@ fun GymApp() {
             currentExerciseIndex = target?.first ?: 0,
             currentWeight = targetSet?.weight.orEmpty(),
             currentReps = targetSet?.reps.orEmpty(),
+            currentSetType = targetSet?.type ?: SetType.NORMAL,
         )
     } else null
     LaunchedEffect(activeSnapshot) {

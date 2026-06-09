@@ -62,6 +62,7 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.example.gymapp.Haptics
 import com.example.gymapp.SavedWorkout
+import com.example.gymapp.SetType
 import com.example.gymapp.WearSync
 import com.example.gymapp.WorkoutExercise
 import com.example.gymapp.formatClock
@@ -508,10 +509,19 @@ private fun HistoryExerciseCard(ex: WorkoutExercise) {
             Text(ex.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         }
         Spacer(Modifier.height(6.dp))
-        ex.sets.forEachIndexed { i, s ->
+        var workingNum = 0
+        ex.sets.forEach { s ->
+            val isWarmup = s.type == SetType.WARMUP
+            if (!isWarmup) workingNum++
+            val badge = if (isWarmup) "W" else "$workingNum"
+            val badgeColor = when (s.type) {
+                SetType.WARMUP  -> RestColor
+                SetType.FAILURE -> HeartColor
+                else            -> DimColor
+            }
             Text(
-                "${i + 1}.  ${if (s.weight.isBlank() && s.reps.isBlank()) "—" else "${s.weight.ifBlank { "0" }} kg × ${s.reps.ifBlank { "0" }}"}",
-                color = DimColor, fontSize = 11.5.sp,
+                "$badge.  ${if (s.weight.isBlank() && s.reps.isBlank()) "—" else "${s.weight.ifBlank { "0" }} kg × ${s.reps.ifBlank { "0" }}"}",
+                color = badgeColor, fontSize = 11.5.sp,
                 modifier = Modifier.padding(vertical = 1.dp),
             )
         }
@@ -736,13 +746,35 @@ private fun InteractiveActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapsh
                     .background(CardColor)
                     .padding(vertical = 8.dp),
             ) {
-                Text(
-                    "Current set",
-                    color = DimColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 2.dp),
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 13.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        "Current set",
+                        color = DimColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    val (typLabel, typColor) = when (workout.currentSetType) {
+                        SetType.WARMUP  -> "Warmup" to RestColor
+                        SetType.FAILURE -> "Failure" to HeartColor
+                        SetType.NORMAL  -> null to null
+                    }
+                    if (typLabel != null && typColor != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(typColor.copy(alpha = 0.16f))
+                                .padding(horizontal = 7.dp, vertical = 2.dp),
+                        ) {
+                            Text(typLabel, color = typColor, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
                 AdjustRow(
                     label = "Weight",
                     value = "${workout.currentWeight.ifBlank { "—" }} kg",
