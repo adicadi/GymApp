@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
@@ -352,9 +353,17 @@ private fun InteractiveActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapsh
                             Icon(
                                 if (workout.running) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 contentDescription = null,
+                                modifier = Modifier.size(s.iconSm),
                             )
                         },
-                        label = { Text(if (workout.running) "Pause" else "Resume") },
+                        label = {
+                            Text(
+                                if (workout.running) "Pause" else "Resume",
+                                fontSize = s.bodySp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                         colors = ChipDefaults.secondaryChipColors(),
                         modifier = Modifier.weight(1f),
                     )
@@ -363,8 +372,21 @@ private fun InteractiveActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapsh
                             Haptics.workoutComplete(context)
                             scope.launch { WatchWearSync.sendFinishWorkout(context) }
                         },
-                        icon = { Icon(Icons.Rounded.Flag, contentDescription = null) },
-                        label = { Text("Finish") },
+                        icon = {
+                            Icon(
+                                Icons.Rounded.Flag,
+                                contentDescription = null,
+                                modifier = Modifier.size(s.iconSm),
+                            )
+                        },
+                        label = {
+                            Text(
+                                "Finish",
+                                fontSize = s.bodySp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                         colors = ChipDefaults.secondaryChipColors(),
                         modifier = Modifier.weight(1f),
                     )
