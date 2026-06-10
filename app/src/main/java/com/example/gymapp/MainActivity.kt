@@ -521,9 +521,12 @@ fun GymApp() {
         }
     }
 
-    // Mirror the in-progress session to the watch on every change, including
-    // which exercise/set the remote currently targets (see watchCurrentTarget)
-    // and that set's editable values, so the watch can show +/- controls for them.
+    // Mirror the in-progress session to the watch on every *structural* change,
+    // including which exercise/set the remote currently targets (see
+    // watchCurrentTarget) and that set's editable values. Ticking values are
+    // deliberately absent from the effect key — elapsed/rest get stamped in at
+    // push time together with a wall-clock anchor, and the watch advances both
+    // locally from it, so nothing is written to the Data Layer once a second.
     val activeSnapshot = if (inSession) {
         val target = watchCurrentTarget()
         val targetEx = target?.let { exercises.getOrNull(it.first) }
@@ -533,10 +536,10 @@ fun GymApp() {
         } else activeWorkoutLabel(exercises)
         WearSync.ActiveWorkoutSnapshot(
             running = timerState.running,
-            elapsedSec = timerState.elapsedSec,
+            elapsedSec = 0,    // stamped at push time
             exerciseName = exerciseName,
             setProgress = setProgress,
-            restSec = rest,
+            restSec = null,    // stamped at push time
             exercises = exercises.map { it.name },
             currentExerciseIndex = target?.first ?: 0,
             currentWeight = targetSet?.weight.orEmpty(),
@@ -544,8 +547,20 @@ fun GymApp() {
             currentSetType = targetSet?.type ?: SetType.NORMAL,
         )
     } else null
-    LaunchedEffect(activeSnapshot) {
-        activeSnapshot?.let { PhoneWearSync.pushActiveWorkout(context, it) }
+    LaunchedEffect(activeSnapshot, restDeadlineMs) {
+        activeSnapshot?.let { snapshot ->
+            val restRemaining = restDeadlineMs?.let { d ->
+                (((d - SystemClock.elapsedRealtime()) + 999) / 1000L).toInt().takeIf { it > 0 }
+            }
+            PhoneWearSync.pushActiveWorkout(
+                context,
+                snapshot.copy(
+                    elapsedSec = WorkoutTimer.elapsed,
+                    restSec = restRemaining,
+                    anchorMillis = System.currentTimeMillis(),
+                ),
+            )
+        }
     }
 
     // Mirror exercise/set progress to WorkoutProgress so the Live Update

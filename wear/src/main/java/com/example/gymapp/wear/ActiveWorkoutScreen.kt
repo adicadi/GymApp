@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,7 @@ import com.example.gymapp.WearSync
 import com.example.gymapp.formatClock
 import com.google.android.horologist.compose.ambient.AmbientAware
 import com.google.android.horologist.compose.ambient.AmbientState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -76,6 +78,35 @@ internal fun ActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapshot, onWris
     }
 }
 
+/** Seconds the snapshot's clocks have aged since the phone stamped them. */
+private fun anchorDriftSec(workout: WearSync.ActiveWorkoutSnapshot, nowMs: Long): Int =
+    if (workout.anchorMillis > 0) ((nowMs - workout.anchorMillis) / 1000L).toInt().coerceAtLeast(0) else 0
+
+private fun liveElapsedSec(workout: WearSync.ActiveWorkoutSnapshot, nowMs: Long): Int =
+    workout.elapsedSec + if (workout.running) anchorDriftSec(workout, nowMs) else 0
+
+private fun liveRestSec(workout: WearSync.ActiveWorkoutSnapshot, nowMs: Long): Int? =
+    workout.restSec?.minus(anchorDriftSec(workout, nowMs))?.takeIf { it > 0 }
+
+/**
+ * Elapsed + rest advanced locally from the snapshot's wall-clock anchor. The
+ * phone only pushes on structural changes; this ticker is what keeps the
+ * clocks moving between pushes without per-second Data Layer writes.
+ */
+@Composable
+private fun rememberLiveTimers(workout: WearSync.ActiveWorkoutSnapshot): Pair<Int, Int?> {
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    val ticking = workout.running || workout.restSec != null
+    LaunchedEffect(ticking, workout.anchorMillis) {
+        nowMs = System.currentTimeMillis()
+        while (ticking) {
+            delay(250L)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+    return liveElapsedSec(workout, nowMs) to liveRestSec(workout, nowMs)
+}
+
 @Composable
 private fun InteractiveActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapshot, onWristBpm: Int?) {
     val context = LocalContext.current
@@ -83,6 +114,7 @@ private fun InteractiveActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapsh
     val s = rememberScreenInfo()
     val listState = rememberScalingLazyListState()
     var pickingExercise by remember { mutableStateOf(false) }
+    val (elapsedSec, restSec) = rememberLiveTimers(workout)
 
     if (pickingExercise) {
         ExercisePickerScreen(
@@ -119,7 +151,7 @@ private fun InteractiveActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapsh
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        formatClock(workout.elapsedSec),
+                        formatClock(elapsedSec),
                         fontSize = s.timerSp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
@@ -178,7 +210,7 @@ private fun InteractiveActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapsh
             }
 
             // Rest timer — amber tint distinguishes it as a distinct mode
-            workout.restSec?.let { rest ->
+            restSec?.let { rest ->
                 item {
                     Column(
                         modifier = Modifier
@@ -498,6 +530,9 @@ internal fun ExercisePickerScreen(
  */
 @Composable
 private fun AmbientActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapshot, onWristBpm: Int?) {
+    // No ticker here — ambient repaints arrive from the system (~1/min), so
+    // computing the live values per recomposition is exactly the right cadence.
+    val nowMs = System.currentTimeMillis()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -506,7 +541,7 @@ private fun AmbientActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapshot, 
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            formatClock(workout.elapsedSec),
+            formatClock(liveElapsedSec(workout, nowMs)),
             fontSize = 34.sp,
             fontWeight = FontWeight.Bold,
             color = DimColor,
@@ -515,7 +550,7 @@ private fun AmbientActiveWorkoutScreen(workout: WearSync.ActiveWorkoutSnapshot, 
         Spacer(Modifier.height(6.dp))
         Text(workout.exerciseName, color = DimColor, textAlign = TextAlign.Center)
         Text(workout.setProgress, color = DimColor, textAlign = TextAlign.Center)
-        workout.restSec?.let { rest ->
+        liveRestSec(workout, nowMs)?.let { rest ->
             Text("Rest ${formatClock(rest)}", color = DimColor, textAlign = TextAlign.Center)
         }
         onWristBpm?.let { bpm ->
