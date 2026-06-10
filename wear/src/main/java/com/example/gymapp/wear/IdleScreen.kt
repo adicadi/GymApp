@@ -56,6 +56,7 @@ import com.example.gymapp.Haptics
 import com.example.gymapp.TodayStats
 import com.example.gymapp.WearSync
 import kotlinx.coroutines.launch
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sqrt
@@ -68,8 +69,19 @@ internal fun IdleScreen(onOpenHistory: () -> Unit) {
     val listState = rememberScalingLazyListState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val today by WatchWearSync.todayStats.collectAsState()
+    val pushed by WatchWearSync.todayStats.collectAsState()
     val history by WatchWearSync.workoutHistory.collectAsState()
+
+    // Steps straight off the wrist sensor beat the phone-pushed snapshot, which
+    // is only as fresh as the phone's last Health Connect sync.
+    val liveSteps by WatchActivityMonitor.steps.collectAsState()
+    val today = when {
+        liveSteps == null -> pushed
+        else -> {
+            val stepsText = String.format(Locale.US, "%,d", liveSteps)
+            pushed?.copy(steps = stepsText) ?: TodayStats(stepsText, "—", "—")
+        }
+    }
 
     Scaffold(
         timeText = { TimeText() },

@@ -3,6 +3,7 @@ package com.example.gymapp.wear
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -71,12 +72,21 @@ fun WearApp() {
 
     // Stream heart-rate sensor only while a set is actually running (saves battery)
     val running = active?.running == true
+    val inSession = active != null
     LaunchedEffect(running) {
         if (running) WatchHeartRateMonitor.start(context) else WatchHeartRateMonitor.stop(context)
     }
+    // Relay readings to the phone at most once every 2s — the sensor emits ~1/s
+    // and each relay is a radio wake-up on both devices.
     val onWristBpm by WatchHeartRateMonitor.bpm.collectAsState()
+    var lastHrRelayMs by remember { mutableStateOf(0L) }
     LaunchedEffect(onWristBpm) {
-        onWristBpm?.let { WatchWearSync.sendHeartRate(context, it) }
+        val bpm = onWristBpm ?: return@LaunchedEffect
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastHrRelayMs >= 2_000L) {
+            lastHrRelayMs = now
+            WatchWearSync.sendHeartRate(context, bpm)
+        }
     }
 
     // Tracked continuously (not just during a session) so a baseline is
@@ -85,15 +95,17 @@ fun WearApp() {
     val watchSteps by WatchActivityMonitor.steps.collectAsState()
     val watchCalories by WatchActivityMonitor.calories.collectAsState()
 
-    // While a session is running, stream steps/calories burned *this workout*
-    // as the delta from the totals captured the moment it started.
+    // While a session exists, stream steps/calories burned *this workout* as
+    // the delta from the totals captured the moment it started. Keyed on the
+    // session's existence, NOT the running flag — pausing must not drop the
+    // baseline, or everything accumulated before the pause is lost on resume.
     var sessionBaseline by remember { mutableStateOf<Pair<Long, Double>?>(null) }
-    LaunchedEffect(running, watchSteps, watchCalories) {
-        if (running && sessionBaseline == null) {
+    LaunchedEffect(inSession, watchSteps, watchCalories) {
+        if (inSession && sessionBaseline == null) {
             val steps = watchSteps
             val cals = watchCalories
             if (steps != null && cals != null) sessionBaseline = steps to cals
-        } else if (!running) {
+        } else if (!inSession) {
             sessionBaseline = null
         }
     }
