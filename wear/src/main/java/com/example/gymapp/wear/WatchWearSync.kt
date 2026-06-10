@@ -152,6 +152,10 @@ object WatchWearSync {
     suspend fun sendHeartRate(context: Context, bpm: Int) =
         sendMessage(context, WearSync.PATH_HEART_RATE, WearSync.encodeHeartRate(bpm))
 
+    /** Relay steps + active calories burned so far this workout session (delta since it started) to the phone. */
+    suspend fun sendSessionActivity(context: Context, steps: Long, calories: Double) =
+        sendMessage(context, WearSync.PATH_SESSION_ACTIVITY, WearSync.encodeActivityStats(WearSync.ActivityStats(steps, calories)))
+
     private suspend fun sendCommand(context: Context, path: String) = sendMessage(context, path, ByteArray(0))
 
     private suspend fun sendMessage(context: Context, path: String, payload: ByteArray) = withContext(Dispatchers.IO) {
