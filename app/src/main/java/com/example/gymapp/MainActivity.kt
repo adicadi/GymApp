@@ -13,6 +13,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -27,6 +38,7 @@ import androidx.health.connect.client.PermissionController
 import com.example.gymapp.ui.theme.AppPalette
 import com.example.gymapp.ui.theme.BgColor
 import com.example.gymapp.ui.theme.GymAppTheme
+import com.example.gymapp.ui.theme.Motion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -39,6 +51,39 @@ import java.util.Locale
 enum class Screen {
     ONBOARDING, HOME, WORKOUT_LANDING, CREATE_ROUTINE, EDIT_ROUTINE, TEMPLATE_DETAIL,
     ACTIVE_WORKOUT, SUMMARY, HISTORY, WORKOUT_DETAIL, PROGRESS, PROFILE, HEART_RATE, STEPS
+}
+
+/** Coarse navigation depth, used to pick a forward (drill-in) vs back transition. */
+private fun navDepth(s: Screen): Int = when (s) {
+    Screen.ONBOARDING -> 0
+    Screen.HOME, Screen.WORKOUT_LANDING, Screen.HISTORY, Screen.PROGRESS -> 1
+    Screen.TEMPLATE_DETAIL, Screen.WORKOUT_DETAIL, Screen.PROFILE, Screen.HEART_RATE,
+    Screen.STEPS, Screen.CREATE_ROUTINE, Screen.EDIT_ROUTINE, Screen.ACTIVE_WORKOUT -> 2
+    Screen.SUMMARY -> 3
+}
+
+/**
+ * Direction-aware screen transitions: session screens rise in like a modal,
+ * drill-ins push from the right, going back pops to the right, and sibling
+ * tabs fade through with a whisper of scale. All springs, never tweens.
+ */
+private fun AnimatedContentTransitionScope<Screen>.screenTransition(): ContentTransform {
+    val toModal = targetState == Screen.ACTIVE_WORKOUT || targetState == Screen.SUMMARY
+    val fromModal = initialState == Screen.ACTIVE_WORKOUT || initialState == Screen.SUMMARY
+    val toDepth = navDepth(targetState)
+    val fromDepth = navDepth(initialState)
+    return when {
+        toModal -> (slideInVertically(Motion.spatialOffset) { it / 5 } + fadeIn(Motion.effectsFloat))
+            .togetherWith(fadeOut(Motion.effectsFloat))
+        fromModal -> fadeIn(Motion.effectsFloat)
+            .togetherWith(slideOutVertically(Motion.spatialOffset) { it / 5 } + fadeOut(Motion.effectsFloat))
+        toDepth > fromDepth -> (slideInHorizontally(Motion.spatialOffset) { it / 4 } + fadeIn(Motion.effectsFloat))
+            .togetherWith(slideOutHorizontally(Motion.spatialOffset) { -it / 6 } + fadeOut(Motion.effectsFloat))
+        toDepth < fromDepth -> (slideInHorizontally(Motion.spatialOffset) { -it / 6 } + fadeIn(Motion.effectsFloat))
+            .togetherWith(slideOutHorizontally(Motion.spatialOffset) { it / 4 } + fadeOut(Motion.effectsFloat))
+        else -> (fadeIn(Motion.effectsFloat) + scaleIn(Motion.spatialFloat, initialScale = 0.96f))
+            .togetherWith(fadeOut(Motion.effectsFloat))
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -632,7 +677,12 @@ fun GymApp() {
     Box(modifier = Modifier.fillMaxSize().background(BgColor)) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
-                when (screen) {
+                AnimatedContent(
+                    targetState = screen,
+                    transitionSpec = { screenTransition() },
+                    label = "screen",
+                ) { current ->
+                when (current) {
                     Screen.ONBOARDING -> OnboardingScreen(
                         manager = manager,
                         onComplete = { name, email, gender, heightCm, weightKg, birthdayMillis ->
@@ -804,6 +854,7 @@ fun GymApp() {
                             screen = Screen.ONBOARDING
                         },
                     )
+                }
                 }
             }
 
