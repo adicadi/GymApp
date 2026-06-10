@@ -53,6 +53,9 @@ object WearSync {
     /** Watch → phone: live on-wrist heart rate reading during a session, in BPM. */
     const val PATH_HEART_RATE = "/gymapp/heart-rate"
 
+    /** Watch → phone: steps + active calories burned so far *this workout session* (delta since the session started). */
+    const val PATH_SESSION_ACTIVITY = "/gymapp/session-activity"
+
     /** Phone → watch: lightweight list of past workouts for the watch's history browser, pushed whenever it changes. */
     const val PATH_WORKOUT_HISTORY = "/gymapp/workout-history"
 
@@ -241,6 +244,21 @@ object WearSync {
     fun encodeHeartRate(bpm: Int): ByteArray = bpm.toString().toByteArray(Charsets.UTF_8)
 
     fun decodeHeartRate(bytes: ByteArray): Int? = String(bytes, Charsets.UTF_8).toIntOrNull()
+
+    /** Today's cumulative steps + active calories, as read directly from the watch's sensors. */
+    data class ActivityStats(val steps: Long, val calories: Double)
+
+    fun encodeActivityStats(stats: ActivityStats): ByteArray =
+        JSONObject()
+            .put("steps", stats.steps)
+            .put("calories", stats.calories)
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+
+    fun decodeActivityStats(bytes: ByteArray): ActivityStats? = runCatching {
+        val o = JSONObject(String(bytes, Charsets.UTF_8))
+        ActivityStats(steps = o.getLong("steps"), calories = o.getDouble("calories"))
+    }.getOrNull()
 
     fun encodeActiveWorkout(s: ActiveWorkoutSnapshot): String =
         JSONObject()

@@ -438,11 +438,14 @@ private fun LineChartView(
     modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
 
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        val padX = 14f; val padTop = 16f; val padBot = 26f
+        val padX = with(density) { 14.dp.toPx() }
+        val padTop = with(density) { 16.dp.toPx() }
+        val padBot = with(density) { 26.dp.toPx() }
 
         val minV = data.minOrNull() ?: 0f
         val maxV = data.maxOrNull() ?: 1f

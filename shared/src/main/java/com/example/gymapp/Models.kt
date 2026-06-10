@@ -61,6 +61,12 @@ data class WorkoutSummaryData(
     val vol: String,
     val prs: List<PrItem>,
     val log: List<LogExercise>,
+    /** Steps taken during the session, from the watch's sensors — null if no watch is paired. */
+    val steps: Long? = null,
+    /** Active calories burned during the session, from the watch's sensors — null if no watch is paired. */
+    val calories: Double? = null,
+    /** (elapsedSec, bpm) heart-rate samples taken across the session, for the post-workout graph. */
+    val hrSamples: List<Pair<Int, Int>> = emptyList(),
 )
 
 /** Today's dashboard stats. */

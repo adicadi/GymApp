@@ -15,8 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
@@ -45,6 +48,14 @@ fun ExerciseDetailSheet(exercise: ExerciseLibraryItem, onClose: () -> Unit) {
     var demo by remember(exercise.name) { mutableStateOf<ExerciseDbExercise?>(null) }
     var loading by remember(exercise.name) { mutableStateOf(true) }
 
+    // Stop leftover fling velocity from being handed to the sheet's drag, which
+    // can otherwise bounce back and forth between the list and the sheet forever.
+    val flingBlocker = remember {
+        object : NestedScrollConnection {
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
+        }
+    }
+
     LaunchedEffect(exercise.name) {
         loading = true
         demo = ExerciseDbClient.findDemo(exercise.name, exercise.group, exercise.equip)
@@ -69,7 +80,9 @@ fun ExerciseDetailSheet(exercise: ExerciseLibraryItem, onClose: () -> Unit) {
         },
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxHeight(0.88f),
+            modifier = Modifier
+                .fillMaxHeight(0.88f)
+                .nestedScroll(flingBlocker),
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp),
         ) {
             item {

@@ -21,8 +21,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymapp.ui.theme.*
@@ -42,6 +45,14 @@ fun ExerciseSearchSheet(
     var detailExercise by remember { mutableStateOf<ExerciseLibraryItem?>(null) }
     // Pre-populate with exercises already in the session
     val added  = remember { mutableStateMapOf<String, Boolean>().also { map -> currentExerciseNames.forEach { map[it] = true } } }
+
+    // Stop leftover fling velocity from being handed to the sheet's drag, which
+    // can otherwise bounce back and forth between the list and the sheet forever.
+    val flingBlocker = remember {
+        object : NestedScrollConnection {
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
+        }
+    }
 
     val filtered = exerciseLibrary.filter { ex ->
         (filter == null || ex.group == filter) &&
@@ -178,7 +189,9 @@ fun ExerciseSearchSheet(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .nestedScroll(flingBlocker),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 ) {
                     items(filtered) { ex ->

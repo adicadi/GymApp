@@ -47,6 +47,13 @@ object PhoneWearSync {
     private val _watchHeartRate = MutableStateFlow<Int?>(null)
     val watchHeartRate: StateFlow<Int?> = _watchHeartRate.asStateFlow()
 
+    /** Steps + active calories burned so far *this workout session*, streamed live from the watch. */
+    private val _sessionSteps = MutableStateFlow<Long?>(null)
+    val sessionSteps: StateFlow<Long?> = _sessionSteps.asStateFlow()
+
+    private val _sessionCalories = MutableStateFlow<Double?>(null)
+    val sessionCalories: StateFlow<Double?> = _sessionCalories.asStateFlow()
+
     private val _saveWorkoutRequested = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val saveWorkoutRequested: SharedFlow<Unit> = _saveWorkoutRequested.asSharedFlow()
 
@@ -70,6 +77,10 @@ object PhoneWearSync {
                 WearSync.PATH_ADJUST_WEIGHT -> WearSync.decodeWeightDelta(event.data)?.let { _weightAdjustments.tryEmit(it) }
                 WearSync.PATH_ADJUST_REPS -> WearSync.decodeRepsDelta(event.data)?.let { _repAdjustments.tryEmit(it) }
                 WearSync.PATH_HEART_RATE -> WearSync.decodeHeartRate(event.data)?.let { _watchHeartRate.value = it }
+                WearSync.PATH_SESSION_ACTIVITY -> WearSync.decodeActivityStats(event.data)?.let {
+                    _sessionSteps.value = it.steps
+                    _sessionCalories.value = it.calories
+                }
                 WearSync.PATH_REQUEST_WORKOUT_DETAIL -> WearSync.decodeId(event.data)?.let { id ->
                     WorkoutRepository.workouts.find { it.id == id }?.let { pushWorkoutDetail(context.applicationContext, it) }
                 }
@@ -88,6 +99,12 @@ object PhoneWearSync {
     /** Reset between sessions so a stale on-wrist reading doesn't linger into the next one. */
     fun clearWatchHeartRate() {
         _watchHeartRate.value = null
+    }
+
+    /** Reset between sessions so a stale steps/calories delta doesn't linger into the next one. */
+    fun clearSessionActivity() {
+        _sessionSteps.value = null
+        _sessionCalories.value = null
     }
 
     /** Push the latest dashboard snapshot to any listening watch. */

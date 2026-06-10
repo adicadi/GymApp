@@ -61,6 +61,14 @@ fun WearApp() {
         ) sensorPermission.launch(Manifest.permission.BODY_SENSORS)
     }
 
+    // Request the activity-recognition permission (needed for steps/calories) once on launch
+    val activityPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION)
+            != PackageManager.PERMISSION_GRANTED
+        ) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+    }
+
     // Stream heart-rate sensor only while a set is actually running (saves battery)
     val running = active?.running == true
     LaunchedEffect(running) {
@@ -69,6 +77,35 @@ fun WearApp() {
     val onWristBpm by WatchHeartRateMonitor.bpm.collectAsState()
     LaunchedEffect(onWristBpm) {
         onWristBpm?.let { WatchWearSync.sendHeartRate(context, it) }
+    }
+
+    // Tracked continuously (not just during a session) so a baseline is
+    // already available the moment a workout starts.
+    LaunchedEffect(Unit) { WatchActivityMonitor.start(context) }
+    val watchSteps by WatchActivityMonitor.steps.collectAsState()
+    val watchCalories by WatchActivityMonitor.calories.collectAsState()
+
+    // While a session is running, stream steps/calories burned *this workout*
+    // as the delta from the totals captured the moment it started.
+    var sessionBaseline by remember { mutableStateOf<Pair<Long, Double>?>(null) }
+    LaunchedEffect(running, watchSteps, watchCalories) {
+        if (running && sessionBaseline == null) {
+            val steps = watchSteps
+            val cals = watchCalories
+            if (steps != null && cals != null) sessionBaseline = steps to cals
+        } else if (!running) {
+            sessionBaseline = null
+        }
+    }
+    LaunchedEffect(watchSteps, watchCalories, sessionBaseline) {
+        val baseline = sessionBaseline ?: return@LaunchedEffect
+        val steps = watchSteps ?: return@LaunchedEffect
+        val cals = watchCalories ?: return@LaunchedEffect
+        WatchWearSync.sendSessionActivity(
+            context,
+            (steps - baseline.first).coerceAtLeast(0L),
+            (cals - baseline.second).coerceAtLeast(0.0),
+        )
     }
 
     MaterialTheme {

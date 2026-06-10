@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymapp.ui.theme.*
 
+private val WarmupAmber = Color(0xFFF5A524)
+
 @Composable
 fun SummaryScreen(
     summary: WorkoutSummaryData,
@@ -105,6 +107,64 @@ fun SummaryScreen(
                 SummaryStat(Icons.Rounded.Layers,     "${summary.sets}",  "Sets",       AccentColor,   Modifier.weight(1f))
                 Box(modifier = Modifier.width(1.dp).height(70.dp).background(LineColor).align(Alignment.CenterVertically))
                 SummaryStat(Icons.Rounded.FitnessCenter, summary.vol,     "kg Volume",  GoodColor,     Modifier.weight(1f))
+            }
+
+            // ── Steps / calories burned, from a paired watch's sensors ─────
+            val summarySteps = summary.steps
+            val summaryCalories = summary.calories
+            if (summarySteps != null || summaryCalories != null) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .border(1.dp, LineColor, RoundedCornerShape(18.dp))
+                        .background(CardColor),
+                ) {
+                    if (summarySteps != null) {
+                        SummaryStat(Icons.Rounded.DirectionsWalk, "$summarySteps", "Steps", MuscleBack, Modifier.weight(1f))
+                    }
+                    if (summarySteps != null && summaryCalories != null) {
+                        Box(modifier = Modifier.width(1.dp).height(70.dp).background(LineColor).align(Alignment.CenterVertically))
+                    }
+                    if (summaryCalories != null) {
+                        SummaryStat(Icons.Rounded.LocalFireDepartment, "${summaryCalories.toInt()}", "kcal Burned", WarmupAmber, Modifier.weight(1f))
+                    }
+                }
+            }
+
+            // ── Heart rate over time ────────────────────────────────────────
+            if (summary.hrSamples.size >= 2) {
+                Spacer(Modifier.height(22.dp))
+                Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                    val bpms = summary.hrSamples.map { it.second }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Rounded.Favorite, null, tint = MuscleChest, modifier = Modifier.size(18.dp))
+                            Text("Heart Rate", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextColor)
+                        }
+                        Text(
+                            "avg ${bpms.average().toInt()} · min ${bpms.min()} · max ${bpms.max()} bpm",
+                            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = SubTextColor,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    HeartRateGraph(
+                        samples = summary.hrSamples,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(1.dp, LineColor, RoundedCornerShape(16.dp))
+                            .background(CardColor)
+                            .padding(12.dp),
+                    )
+                }
             }
 
             if (summary.prs.isNotEmpty()) {
@@ -287,6 +347,52 @@ fun SummaryScreen(
                     Text("Cancel", color = SubTextColor, fontWeight = FontWeight.SemiBold)
                 }
             },
+        )
+    }
+}
+
+/** Simple line graph of heart rate over the workout's elapsed time. */
+@Composable
+private fun HeartRateGraph(samples: List<Pair<Int, Int>>, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val minBpm = samples.minOf { it.second }
+        val maxBpm = samples.maxOf { it.second }
+        val range = (maxBpm - minBpm).coerceAtLeast(1)
+        val minSec = samples.first().first
+        val maxSec = samples.last().first
+        val span = (maxSec - minSec).coerceAtLeast(1)
+
+        val pts = samples.map { (sec, bpm) ->
+            androidx.compose.ui.geometry.Offset(
+                x = (sec - minSec).toFloat() / span * w,
+                y = h - (bpm - minBpm).toFloat() / range * h,
+            )
+        }
+
+        val linePath = androidx.compose.ui.graphics.Path().apply {
+            moveTo(pts.first().x, pts.first().y)
+            for (i in 1 until pts.size) lineTo(pts[i].x, pts[i].y)
+        }
+        val areaPath = androidx.compose.ui.graphics.Path().apply {
+            addPath(linePath)
+            lineTo(pts.last().x, h)
+            lineTo(pts.first().x, h)
+            close()
+        }
+        drawPath(
+            areaPath,
+            Brush.verticalGradient(colors = listOf(MuscleChest.copy(alpha = 0.25f), Color.Transparent), startY = 0f, endY = h),
+        )
+        drawPath(
+            linePath,
+            color = MuscleChest,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 2.6f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round,
+            ),
         )
     }
 }

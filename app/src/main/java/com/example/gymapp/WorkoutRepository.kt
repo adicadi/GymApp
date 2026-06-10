@@ -216,6 +216,9 @@ fun buildSummary(
     title: String,
     elapsedSec: Int,
     exercises: List<WorkoutExercise>,
+    steps: Long? = null,
+    calories: Double? = null,
+    hrSamples: List<Pair<Int, Int>> = emptyList(),
 ): WorkoutSummaryData {
     var volume = 0.0
     var setCount = 0
@@ -263,6 +266,9 @@ fun buildSummary(
         vol = String.format(java.util.Locale.US, "%,d", volume.toInt()),
         prs = prs,
         log = log,
+        steps = steps,
+        calories = calories,
+        hrSamples = hrSamples,
     )
 }
 
