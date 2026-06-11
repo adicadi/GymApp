@@ -50,8 +50,22 @@ object WatchExerciseMonitor {
                 val bpm = sample.value.toInt()
                 if (bpm > 0) _heartRate.value = bpm
             }
-            metrics.getData(DataType.STEPS_TOTAL)?.let { _steps.value = it.total }
-            metrics.getData(DataType.CALORIES_TOTAL)?.let { _calories.value = it.total }
+            // Prefer the device-computed session totals; accumulate the delta
+            // samples ourselves on devices that don't offer them (see start()).
+            val totalSteps = metrics.getData(DataType.STEPS_TOTAL)
+            if (totalSteps != null) {
+                _steps.value = totalSteps.total
+            } else {
+                val delta = metrics.getData(DataType.STEPS).sumOf { it.value }
+                if (delta > 0) _steps.value = (_steps.value ?: 0L) + delta
+            }
+            val totalCalories = metrics.getData(DataType.CALORIES_TOTAL)
+            if (totalCalories != null) {
+                _calories.value = totalCalories.total
+            } else {
+                val delta = metrics.getData(DataType.CALORIES).sumOf { it.value }
+                if (delta > 0) _calories.value = (_calories.value ?: 0.0) + delta
+            }
         }
 
         override fun onLapSummaryReceived(lapSummary: ExerciseLapSummary) {}
@@ -77,20 +91,63 @@ object WatchExerciseMonitor {
         _calories.value = null
         val c = client(context)
         c.setUpdateCallback(callback)
-        val config = ExerciseConfig(
-            exerciseType = ExerciseType.STRENGTH_TRAINING,
-            dataTypes = setOf(DataType.HEART_RATE_BPM, DataType.STEPS_TOTAL, DataType.CALORIES_TOTAL),
-            isAutoPauseAndResumeEnabled = false,
-            isGpsEnabled = false,
-        )
-        val future = c.startExerciseAsync(config)
-        future.addListener(
+        // Capability sets differ per watch (this one rejects Steps for
+        // STRENGTH_TRAINING), so resolve what to request at runtime: prefer
+        // strength training, fall back to the generic workout type if it
+        // covers more of HR/steps/calories, and take delta types where the
+        // session totals aren't offered.
+        val capFuture = c.getCapabilitiesAsync()
+        capFuture.addListener(
             {
-                runCatching { future.get() }.onFailure {
-                    // Roll back so the session loop retries — e.g. the
-                    // background-sensors grant may arrive mid-session.
+                runCatching {
+                    val caps = capFuture.get()
+                    var best: Pair<ExerciseType, Set<DataType<*, *>>>? = null
+                    for (type in listOf(ExerciseType.STRENGTH_TRAINING, ExerciseType.WORKOUT)) {
+                        val supported = runCatching {
+                            caps.getExerciseTypeCapabilities(type).supportedDataTypes
+                        }.getOrNull() ?: continue
+                        val request = buildSet {
+                            if (DataType.HEART_RATE_BPM in supported) add(DataType.HEART_RATE_BPM)
+                            if (DataType.STEPS_TOTAL in supported) add(DataType.STEPS_TOTAL)
+                            else if (DataType.STEPS in supported) add(DataType.STEPS)
+                            if (DataType.CALORIES_TOTAL in supported) add(DataType.CALORIES_TOTAL)
+                            else if (DataType.CALORIES in supported) add(DataType.CALORIES)
+                        }
+                        if (best == null || request.size > best.second.size) best = type to request
+                        if (request.size == 3) break   // first type covering everything wins
+                    }
+                    val (type, dataTypes) = best ?: error("no usable exercise type on this device")
+                    Log.i(TAG, "starting $type with $dataTypes")
+                    val startFuture = c.startExerciseAsync(
+                        ExerciseConfig(
+                            exerciseType = type,
+                            dataTypes = dataTypes,
+                            isAutoPauseAndResumeEnabled = false,
+                            isGpsEnabled = false,
+                        ),
+                    )
+                    startFuture.addListener(
+                        {
+                            runCatching { startFuture.get() }.onFailure { e ->
+                                val alreadyActive = generateSequence(e as Throwable?) { it.cause }
+                                    .any { it.message?.contains("already", ignoreCase = true) == true }
+                                if (alreadyActive) {
+                                    // Process restarted mid-session: the exercise we
+                                    // started earlier is still running and the callback
+                                    // re-registration above reattaches us to it.
+                                    Log.w(TAG, "exercise already active — reattached")
+                                } else {
+                                    // Roll back so the session loop retries.
+                                    started = false
+                                    Log.e(TAG, "startExercise failed", e)
+                                }
+                            }
+                        },
+                        MoreExecutors.directExecutor(),
+                    )
+                }.onFailure {
                     started = false
-                    Log.e(TAG, "startExercise failed", it)
+                    Log.e(TAG, "capability query failed", it)
                 }
             },
             MoreExecutors.directExecutor(),

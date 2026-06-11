@@ -127,13 +127,25 @@ fun WearApp() {
         }
     }
 
-    // Daily totals for the idle dashboard only (slow, batched — fine there).
+    // Daily totals: feeds the idle dashboard, and doubles as the in-session
+    // steps fallback below.
     LaunchedEffect(Unit) { WatchActivityMonitor.start(context) }
 
-    // Live session steps/kcal: exercise totals are cumulative since the
-    // session started, so they relay as-is — no baseline subtraction, and
-    // pausing can't lose anything.
-    val sessionSteps by WatchExerciseMonitor.steps.collectAsState()
+    // Live session steps/kcal. Calories (and steps, where offered) come from
+    // the exercise — cumulative since the session started, nothing to subtract.
+    // Some watches (this one included) expose no step data type for exercises
+    // at all, so steps fall back to a session delta over the passive daily
+    // counter; while an exercise is live the sensor pipeline runs in
+    // fast-flush mode, so that counter updates quickly too.
+    val exerciseSteps by WatchExerciseMonitor.steps.collectAsState()
+    val dailySteps by WatchActivityMonitor.steps.collectAsState()
+    var stepsBaseline by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(inSession, dailySteps) {
+        if (!inSession) stepsBaseline = null
+        else if (stepsBaseline == null && dailySteps != null) stepsBaseline = dailySteps
+    }
+    val sessionSteps = exerciseSteps
+        ?: stepsBaseline?.let { base -> dailySteps?.let { now -> (now - base).coerceAtLeast(0L) } }
     val sessionCalories by WatchExerciseMonitor.calories.collectAsState()
     LaunchedEffect(sessionSteps, sessionCalories) {
         if (inSession && (sessionSteps != null || sessionCalories != null)) {
