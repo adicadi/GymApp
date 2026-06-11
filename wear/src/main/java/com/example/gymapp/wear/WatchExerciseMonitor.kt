@@ -83,7 +83,18 @@ object WatchExerciseMonitor {
             isAutoPauseAndResumeEnabled = false,
             isGpsEnabled = false,
         )
-        c.startExerciseAsync(config).logFailure("startExercise")
+        val future = c.startExerciseAsync(config)
+        future.addListener(
+            {
+                runCatching { future.get() }.onFailure {
+                    // Roll back so the session loop retries — e.g. the
+                    // background-sensors grant may arrive mid-session.
+                    started = false
+                    Log.e(TAG, "startExercise failed", it)
+                }
+            },
+            MoreExecutors.directExecutor(),
+        )
     }
 
     /** Pause sensor aggregation while the phone timer is paused. */

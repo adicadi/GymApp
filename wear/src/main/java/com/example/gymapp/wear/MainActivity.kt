@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.wear.compose.material.MaterialTheme
 import com.example.gymapp.WearSync
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,12 +61,24 @@ fun WearApp() {
         }
     }
 
-    // Request the on-wrist heart rate permission once on launch
-    val sensorPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    // On-wrist sensor permissions. BODY_SENSORS_BACKGROUND is chained after the
+    // foreground grant: workouts usually start from the phone while the watch
+    // screen is off (activity paused), and starting the Health Services
+    // exercise from there throws SecurityException without the background grant.
+    val backgroundSensorPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val sensorPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) backgroundSensorPermission.launch(Manifest.permission.BODY_SENSORS_BACKGROUND)
+        }
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.BODY_SENSORS)
-            != PackageManager.PERMISSION_GRANTED
-        ) sensorPermission.launch(Manifest.permission.BODY_SENSORS)
+        fun has(p: String) = ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
+        when {
+            !has(Manifest.permission.BODY_SENSORS) ->
+                sensorPermission.launch(Manifest.permission.BODY_SENSORS)
+            !has(Manifest.permission.BODY_SENSORS_BACKGROUND) ->
+                backgroundSensorPermission.launch(Manifest.permission.BODY_SENSORS_BACKGROUND)
+        }
     }
 
     // Request the activity-recognition permission (needed for steps/calories) once on launch
@@ -83,7 +96,17 @@ fun WearApp() {
     val running = active?.running == true
     val inSession = active != null
     LaunchedEffect(inSession) {
-        if (inSession) WatchExerciseMonitor.start(context) else WatchExerciseMonitor.stop(context)
+        if (!inSession) {
+            WatchExerciseMonitor.stop(context)
+            return@LaunchedEffect
+        }
+        // Keep nudging while the session lasts: start() is a no-op once the
+        // exercise is live, but a failed attempt (e.g. permission granted only
+        // mid-session) resets itself and gets retried here.
+        while (true) {
+            WatchExerciseMonitor.start(context)
+            delay(5_000L)
+        }
     }
     LaunchedEffect(running, inSession) {
         if (inSession) {
